@@ -2,6 +2,7 @@ package org.nunn.gephiserver;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
@@ -58,7 +59,6 @@ public class Props {
 			try {
 				String confDir = System.getProperty(APP_CONF_DIR_PROPERTY_NAME);
 				if (confDir == null) {
-					LOGGER.info("Specify configuration directory with {} system property. Trying {} as default.", APP_CONF_DIR_PROPERTY_NAME, APP_PROPS_DIRECTORY);
 					confDir = APP_PROPS_DIRECTORY;
 				}
 				File appPropsSource = new File(confDir + "/" + APP_PROPS_FILE_NAME);
@@ -83,7 +83,9 @@ public class Props {
 					props.load(ins);
 				}
 				else {
-					LOGGER.error("Properties file could not be found");
+					throw new FileNotFoundException(APP_PROPS_FILE_NAME + " file not found. Default location is in "
+							+ APP_PROPS_DIRECTORY + " directory. Specify a custom config directory with "
+							+ APP_CONF_DIR_PROPERTY_NAME + " system property.");
 				}
 			}
 			finally {
@@ -98,7 +100,7 @@ public class Props {
 			}
 		}
 		catch (InvalidPathException | URISyntaxException | IOException e) {
-			LOGGER.error("Properties file could not be read", e);
+			throw new RuntimeException("Application properties file could not be loaded.", e);
 		}
 		
 		appLocation = loc;
