@@ -8,6 +8,7 @@ public class GraphExporterSVG implements GraphExporter<StringBuilderWriter> {
 
 	/** Uses Gephi to lay out a network diagram.
 	 * @return SVG network diagram. */
+	@Override
 	public StringBuilderWriter export() {
 		SVGExporter svgExporter = (SVGExporter) EXPORT_CONTROLLER.getExporter("svg");
 		

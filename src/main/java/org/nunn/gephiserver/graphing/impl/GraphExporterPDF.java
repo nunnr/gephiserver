@@ -9,6 +9,7 @@ public class GraphExporterPDF implements GraphExporter<ByteArrayOutputStream> {
 
 	/** Uses Gephi to lay out a network diagram.
 	 * @return PDF data network diagram. */
+	@Override
 	public ByteArrayOutputStream export() {
 		PDFExporter pdfExporter = (PDFExporter) EXPORT_CONTROLLER.getExporter("pdf");
 		
