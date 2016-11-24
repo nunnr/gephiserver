@@ -31,7 +31,7 @@ public class Graph {
 	@Path("/rootySvg")
 	@Produces({MimeType.APPLICATION_SVG_XML, MimeType.TEXT_HTML})
 	public String rootySvg(@QueryParam("graphId") Integer graphId, @QueryParam("rootNodeId") int rootNodeId) throws Exception {
-		Map<String, Object> extraParam = Collections.<String, Object>emptyMap();
+		Map<String, Object> extraParam = Collections.<String, Object>singletonMap("rootNodeId", rootNodeId);
 		GraphOutput<StringBuilderWriter> result = GraphBuilder.INSTANCE.doGraph(GraphBuilder.INSTANCE.logicRoot, GraphBuilder.INSTANCE.layoutStd, GraphBuilder.INSTANCE.exporterSvg, graphId, extraParam);
 		return result.getOutput().toString();
 	}

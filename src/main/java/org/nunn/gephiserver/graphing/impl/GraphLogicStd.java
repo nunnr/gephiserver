@@ -45,6 +45,7 @@ public class GraphLogicStd implements GraphLogic {
 			con = graphDataSource.getConnection();
 		
 			Map<String, Object> graphParam = getGraphParameters(con, graphId);
+			graphParam.putAll(extraParam);
 			
 			ContainerLoader cl = container.getLoader();
 			
@@ -55,8 +56,6 @@ public class GraphLogicStd implements GraphLogic {
 			
 			addNodes(graphId, con, cl, graphParam);
 			addEdges(graphId, con, cl, graphParam);
-			
-			graphParam.putAll(extraParam);
 		}
 		catch (SQLException e) {
 			throw new RuntimeException(e);
