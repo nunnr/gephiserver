@@ -2,56 +2,63 @@ package org.nunn.gephiserver.system;
 
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.Map.Entry;
 
 /** Simple combination of Map with a clean up thread that removes entries after an amount of time **/
 public class ExpiringCache<TKey, TValue> {
 	
 	/** Implement this interface to have code executed whenever a cache entry expires */
-	public static interface ExpirationEventHandler<TEntry> {
+	public static interface ExpirationEventHandler<TKeyExpired, TValueExpired> {
 		/** Method called on expiration.
-		 * @param evictedEntry The cache entry the has been evicted. */
-		void onExpiration(TEntry evictedEntry);
+		 * @param key The key of the cache data that has been evicted.
+		 * @param data The cache data that has been evicted. */
+		void onExpiration(TKeyExpired key, TValueExpired data);
 	}
 	
-	private class CacheEntry<TEntry> {
+	private class ExpirationEventHandlerNoOp implements ExpirationEventHandler<TKey, TValue> {
+		@Override
+		public void onExpiration(TKey key, TValue data) {
+			// default implementation does nothing
+		}
+	}
+	
+	private class CacheEntry {
 		private final long expiry;
-		private final TEntry data;
+		private final TValue data;
 		
-		private CacheEntry(TEntry data) {
+		private CacheEntry(TValue data) {
 			this.expiry = System.currentTimeMillis() + lifetimeMillis;
 			this.data = data;
 		}
 	}
 	
-	private final LinkedHashMap<TKey, CacheEntry<TValue>> cache;
+	private final LinkedHashMap<TKey, CacheEntry> cache;
 	private final long lifetimeMillis;
-	private ExpirationEventHandler<TValue> expirationEventHandler;
+	private ExpirationEventHandler<TKey, TValue> expirationEventHandler;
 	private Thread worker;
 	private volatile boolean runCleaner;
 	
-	public ExpiringCache(long lifetimeMillis, ExpirationEventHandler<TValue> expirationEventHandler, boolean enableExpiry) {
-		this.cache = new LinkedHashMap<TKey, CacheEntry<TValue>>();
+	public ExpiringCache(long lifetimeMillis, ExpirationEventHandler<TKey, TValue> expirationEventHandler, boolean enableExpiry) {
+		this.cache = new LinkedHashMap<TKey, CacheEntry>();
+		if (lifetimeMillis < 1) {
+			throw new IllegalArgumentException("The lifetimeMillis argument must be greater than 1.");
+		}
 		this.lifetimeMillis = lifetimeMillis;
-		this.expirationEventHandler = expirationEventHandler;
+		this.expirationEventHandler = expirationEventHandler != null ? expirationEventHandler : new ExpirationEventHandlerNoOp();
 		if (enableExpiry) {
 			enableExpiry();
 		}
 	}
 	
-	public ExpiringCache(long lifetimeMillis, ExpirationEventHandler<TValue> expirationEventHandler) {
+	public ExpiringCache(long lifetimeMillis, ExpirationEventHandler<TKey, TValue> expirationEventHandler) {
 		this(lifetimeMillis, expirationEventHandler, true);
 	}
 	
 	public ExpiringCache(long lifetimeMillis) {
-		this(lifetimeMillis, new ExpirationEventHandler<TValue>() {
-			@Override
-			public void onExpiration(TValue evictedEntry) {
-				// default implementation does nothing
-			}
-		});
+		this(lifetimeMillis, null);
 	}
 	
-	public void enableExpiry() {
+	public synchronized void enableExpiry() {
 		runCleaner = true;
 		if (worker == null || Thread.State.TERMINATED.equals(worker.getState())) {
 			worker = new Thread(new Cleaner(), "Expiring_Cache_Worker");
@@ -70,7 +77,7 @@ public class ExpiringCache<TKey, TValue> {
 	}
 	
 	public void put(TKey key, TValue data) {
-		CacheEntry<TValue> entry = new CacheEntry<>(data);
+		CacheEntry entry = new CacheEntry(data);
 		synchronized (cache) {
 			cache.put(key, entry);
 			cache.notifyAll();
@@ -78,7 +85,7 @@ public class ExpiringCache<TKey, TValue> {
 	}
 	
 	public TValue get(TKey key) {
-		CacheEntry<TValue> entry;
+		CacheEntry entry;
 		synchronized (cache) {
 			entry = cache.get(key);
 			cache.notifyAll();
@@ -87,7 +94,7 @@ public class ExpiringCache<TKey, TValue> {
 	}
 	
 	public TValue remove(TKey key) {
-		CacheEntry<TValue> entry;
+		CacheEntry entry;
 		synchronized (cache) {
 			entry = cache.remove(key);
 			cache.notifyAll();
@@ -133,8 +140,9 @@ public class ExpiringCache<TKey, TValue> {
 		long diff = 0;
 		
 		synchronized (cache) {
-			for (Iterator<CacheEntry<TValue>> it = cache.values().iterator(); it.hasNext();) {
-				CacheEntry<TValue> cacheEntry = it.next();
+			for (Iterator<Entry<TKey, CacheEntry>> it = cache.entrySet().iterator(); it.hasNext();) {
+				Entry<TKey, CacheEntry> entry = it.next();
+				CacheEntry cacheEntry = entry.getValue();
 	
 				diff = cacheEntry.expiry - System.currentTimeMillis();
 				if (diff > 0) {
@@ -142,7 +150,7 @@ public class ExpiringCache<TKey, TValue> {
 				}
 	
 				it.remove();
-				expirationEventHandler.onExpiration(cacheEntry.data);
+				expirationEventHandler.onExpiration(entry.getKey(), cacheEntry.data);
 			}
 		}
 		
@@ -154,26 +162,21 @@ public class ExpiringCache<TKey, TValue> {
 		public void run() {
 			synchronized (cache) {
 				while (runCleaner) {
-					if (cache.isEmpty()) { // nothing to do, so wait
-						try {
+					try {
+						if (Thread.interrupted()) {
+							throw new InterruptedException();
+						}
+						if (cache.isEmpty()) { // nothing to do, so wait
 							cache.wait(); // will be notified when item next added
 						}
-						catch (InterruptedException ex) {
-							runCleaner = false;
-						}
-					}
-					else { // may be expired items, perform clean up
-						long diff = cleanup();
-						try {
+						else { // may be expired items, perform clean up
+							long diff = cleanup();
 							if (diff > 0) {
 								cache.wait(diff); // wake self up when last tested item expired
 							}
 						}
-						catch (InterruptedException ex) {
-							runCleaner = false;
-						}
 					}
-					if (Thread.interrupted()) {
+					catch (InterruptedException ex) {
 						runCleaner = false;
 					}
 				}

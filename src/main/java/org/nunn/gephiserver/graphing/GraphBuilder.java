@@ -33,6 +33,7 @@ public final class GraphBuilder {
 	/** max msec wait time for clients - we wait() the user request thread whilst rendering */
 	private static final long MAX_REQUEST_JOB_WAIT = Props.INSTANCE.getPropertyAsLong("maxRequestJobWait", 5000L);
 	
+	private final int jobQueueLength;
 	private final BlockingQueue<Runnable> jobQueue;
 	private final ExecutorService executorService;
 	private final ExpiringCache<String, Future<?>> resultCache;
@@ -45,10 +46,11 @@ public final class GraphBuilder {
 	public final GraphExporterSVG exporterSvg;
 	public final GraphExporterPDF exporterPdf;
 	
-	private static class FutureExpirationHandler implements ExpiringCache.ExpirationEventHandler<Future<?>> {
+	private static class FutureExpirationHandler implements ExpiringCache.ExpirationEventHandler<String, Future<?>> {
 		@Override
-		public void onExpiration(Future<?> evictedEntry) {
+		public void onExpiration(String key, Future<?> evictedEntry) {
 			evictedEntry.cancel(true);
+			LOGGER.debug("Job {} expired before completion", key);
 		}
 	}
 	
@@ -56,7 +58,7 @@ public final class GraphBuilder {
 	
 	private GraphBuilder() {
 		/** length of pending jobs queue */
-		int jobQueueLength = Props.INSTANCE.getPropertyAsInteger("jobQueueLength", 10);
+		jobQueueLength = Props.INSTANCE.getPropertyAsInteger("jobQueueLength", 10);
 		jobQueue = new ArrayBlockingQueue<>(jobQueueLength);
 		
 		executorService = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, jobQueue);
@@ -73,14 +75,14 @@ public final class GraphBuilder {
 		exporterSvg = new GraphExporterSVG();
 		exporterPdf = new GraphExporterPDF();
 		
-		LOGGER.info("GraphBuilder instance created");
+		LOGGER.debug("GraphBuilder instance created");
 	}
 	
 	public void initialize() {
 		LOGGER.debug(() -> graphDataSource.toString());
 		LOGGER.debug("Checking database schema.");
 		graphDataSource.checkSchema();
-		LOGGER.info("Initialize tasks complete.");
+		LOGGER.debug("Graph builder init complete.");
 	}
 
 	public void destroy() {
@@ -91,12 +93,18 @@ public final class GraphBuilder {
 		LOGGER.info("Destroy tasks complete.");
 	}
 	
+	private <OT> Future<GraphOutput<OT>> submit(GraphJob<OT> graphJob) {
+		Future<GraphOutput<OT>> future = executorService.submit(graphJob);
+		LOGGER.info("Queue filled {} of {}", jobQueue.size(), jobQueueLength);
+		return future;
+	}
+	
 	public <OT> GraphOutput<OT> doGraph(GraphLogic graphType, GraphLayout graphLayout, GraphExporter<OT> graphExporter, Integer graphId, Map<String, Object> extraParam)
 			throws RejectedExecutionException, CancellationException, TimeoutException, InterruptedException, ExecutionException {
 		
 		GraphJob<OT> graphJob = new GraphJob<>(graphType, graphLayout, graphExporter, graphId, extraParam);
 		
-		Future<GraphOutput<OT>> future = executorService.submit(graphJob);
+		Future<GraphOutput<OT>> future = submit(graphJob);
 		
 		GraphOutput<OT> result;
 		try {
@@ -113,7 +121,7 @@ public final class GraphBuilder {
 			throws RejectedExecutionException {
 		
 		GraphJobAsync<OT> graphJobAsync = new GraphJobAsync<>(graphType, graphLayout, graphExporter, graphId, extraParam);
-		Future<GraphOutput<OT>> future = executorService.submit(graphJobAsync);
+		Future<GraphOutput<OT>> future = submit(graphJobAsync);
 		resultCache.put(graphJobAsync.uuid, future);
 		return graphJobAsync.uuid;
 	}
