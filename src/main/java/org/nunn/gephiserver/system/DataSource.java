@@ -4,8 +4,13 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.Driver;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.regex.Pattern;
@@ -22,8 +27,15 @@ public class DataSource {
 	private static final Logger LOGGER = LogManager.getLogger(DataSource.class);
 	
 	private final HikariDataSource ds;
+	private final int cursorFetchSize;
+	private final int databaseMajorVersion;
+	private final int databaseMinorVersion;
+	private final String databaseProductName;
+	private final String databaseProductVersion;
 	
 	public DataSource(String name) {
+		this.cursorFetchSize = Props.INSTANCE.getPropertyAsInteger("cursorFetchSize", 50);
+		
 		HikariConfig config = new HikariConfig();
 		
 		config.setPoolName(name);
@@ -35,12 +47,22 @@ public class DataSource {
 		addDataSourceProperties(config);
 
 		ds = new HikariDataSource(config);
+		
+		try (Connection con = ds.getConnection()) {
+			DatabaseMetaData dbmd = con.getMetaData();
+			this.databaseMajorVersion = dbmd.getDatabaseMajorVersion();
+			this.databaseMinorVersion = dbmd.getDatabaseMinorVersion();
+			this.databaseProductName = dbmd.getDatabaseProductName();
+			this.databaseProductVersion = dbmd.getDatabaseProductVersion();
+		}
+		catch (SQLException e) {
+			throw new RuntimeException("Failed to get database connection on initialisation.", e);
+		}
 	}
 	
 	private void addDataSourceProperties(HikariConfig config) {
-		Pattern pattern = Pattern.compile("^dataSourceProperty\\..+$");
 		int length = "dataSourceProperty.".length();
-		Map<String, String> properties = Props.INSTANCE.getAllPropertiesMatching(pattern);
+		Map<String, String> properties = Props.INSTANCE.getAllPropertiesMatching(Pattern.compile("^dataSourceProperty\\..+$"));
 		for (Entry<String, String> property : properties.entrySet()) {
 			String shortName = property.getKey().substring(length);
 			config.addDataSourceProperty(shortName, property.getValue());
@@ -83,25 +105,57 @@ public class DataSource {
 	
 	@Override
 	public String toString() {
-		Connection con = null;
-		try {
-			con = ds.getConnection();
-			DatabaseMetaData dbmd = con.getMetaData();
-			return String.format("HikariCP pool %s connected to %s %s", ds.getPoolName(), dbmd.getDatabaseProductName(), dbmd.getDatabaseProductVersion());
-		}
-		catch (SQLException e) {
-			throw new RuntimeException(e);
-		}
-		finally {
-			if (con != null) {
-				try {
-					con.close();
-				}
-				catch (SQLException e1) {
-					LOGGER.warn("Connection close failed!");
-				}
-			}
-		}
+		return String.format("HikariCP pool %s connected to %s %s", ds.getPoolName(), databaseProductName, databaseProductVersion);
 	}
 	
+	public List<Map<String, Object>> convertResultSetToList(ResultSet rs) throws SQLException {
+		ResultSetMetaData md = rs.getMetaData();
+		int columns = md.getColumnCount();
+		List<Map<String, Object>> list = new ArrayList<>();
+
+		while (rs.next()) {
+			HashMap<String, Object> row = new HashMap<>(columns);
+			for (int i = 1; i <= columns; i++) {
+				row.put(md.getColumnName(i), rs.getObject(i));
+			}
+			list.add(row);
+		}
+
+		return list;
+	}
+
+	public Map<String, Object> convertResultSetToSingleMap(ResultSet rs) throws SQLException {
+		ResultSetMetaData md = rs.getMetaData();
+		int columns = md.getColumnCount();
+		Map<String, Object> row = new HashMap<String, Object>(columns);
+
+		if (rs.next()) {
+			for (int i = 1; i <= columns; i++) {
+				row.put(md.getColumnName(i), rs.getObject(i));
+			}
+		}
+
+		return row;
+	}
+
+	public int getCursorFetchSize() {
+		return cursorFetchSize;
+	}
+
+	public int getDatabaseMajorVersion() {
+		return databaseMajorVersion;
+	}
+
+	public int getDatabaseMinorVersion() {
+		return databaseMinorVersion;
+	}
+
+	public String getDatabaseProductName() {
+		return databaseProductName;
+	}
+
+	public String getDatabaseProductVersion() {
+		return databaseProductVersion;
+	}
+
 }

@@ -1,24 +1,42 @@
 package org.nunn.gephiserver.graphing;
 
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.nunn.gephiserver.system.DataSource;
 
 public class GraphDataSource {
 	
-	private static final Logger LOGGER = LogManager.getLogger(GraphDataSource.class);
-	
 	private final DataSource dataSource;
 	
-	public GraphDataSource() {
-		this.dataSource = new DataSource("GephiServerPool");
+	private final String schema;
+	
+	private final String selectGraphByID;
+	private final String selectNodeByGraphID;
+	private final String selectEdgeByGraphID;
+	
+	public GraphDataSource(String schema) {
+		if (schema == null || schema.isEmpty()) {
+			throw new IllegalArgumentException("Database schema name is required");
+		}
+		this.schema = schema;
+		this.selectGraphByID = "select pk_id, title, creator, directed, up_weight, down_weight, url_base"
+								+ " from " + schema + ".graph"
+								+ " where pk_id = ?";
+		this.selectNodeByGraphID = "select pk_num, pk_graph, title, tag"
+									+ " from " + schema + ".node"
+									+ " where pk_graph = ?";
+		this.selectEdgeByGraphID = "select pk_graph, pk_num, source_node, target_node, val"
+									+ " from " + schema + ".edge"
+									+ " where pk_graph = ?";
+		this.dataSource = new DataSource("GephiServerPool-" + schema);
 	}
 	
 	public Connection getConnection() throws SQLException {
@@ -39,35 +57,94 @@ public class GraphDataSource {
 	}
 	
 	public void checkSchema() {
-		LOGGER.info("Checking database schema.");
-		Connection con = null;
-		try {
-			con = getConnection();
+		try (Connection con = getConnection()) {
+			DatabaseMetaData dbmd = con.getMetaData();
 			
-			Set<String> gephiTableNames = new HashSet<>();
-			
-			ResultSet rs = con.getMetaData().getTables(null, "gephi", "%", new String[]{"TABLE"});
-			while (rs.next()) {
-				String tableName = rs.getString("TABLE_NAME");
-				gephiTableNames.add(tableName);
+			try (ResultSet rs = dbmd.getSchemas(null, schema)) {
+				if ( ! rs.next()) {
+					//throw new RuntimeException("Schema " + schema + " missing!");
+				}
 			}
 			
+			Set<String> gephiTableNames = new HashSet<>();
+			try (ResultSet rs = dbmd.getTables(null, schema, "%", new String[]{"TABLE"})) {
+				while (rs.next()) {
+					String tableName = rs.getString("TABLE_NAME");
+					gephiTableNames.add(tableName);
+				}
+			}
 			if ( ! gephiTableNames.containsAll(Arrays.asList("graph", "node", "edge"))) {
-				LOGGER.warn("Tables missing from gephi schema!");
+				throw new RuntimeException("Tables missing from " + schema + " schema!");
 			}
 		}
 		catch (SQLException e) {
 			throw new RuntimeException(e);
 		}
-		finally {
-			if (con != null) {
-				try {
-					con.close();
-				}
-				catch (SQLException e) {
-					LOGGER.error("Error closing database connection.", e);
+	}
+
+	public Map<String, Object> getGraphByID(Connection con, Integer id) throws SQLException {
+		Map<String, Object> result;
+		
+		try (PreparedStatement ps = con.prepareStatement(selectGraphByID)) {
+			ps.setInt(1, id);
+			
+			try (ResultSet rs = ps.executeQuery()) {
+				result = dataSource.convertResultSetToSingleMap(rs);
+			}
+		}
+		
+		return result;
+	}
+	
+	@FunctionalInterface
+	public static interface NodeComsumer { 
+		public boolean push(Integer num, String name, String tag);
+	}
+	
+	public void populateNodesForGraph(Connection con, Integer graphId, NodeComsumer consumer) throws SQLException {
+		boolean originalAutoCommit = con.getAutoCommit();
+		con.setAutoCommit(false);
+		
+		try (PreparedStatement ps = con.prepareStatement(selectNodeByGraphID)) {
+			ps.setInt(1, graphId);
+			ps.setFetchSize(dataSource.getCursorFetchSize());
+			
+			try (ResultSet rs = ps.executeQuery()) {
+				while (rs.next()) {
+					if ( ! consumer.push(rs.getInt("pk_num"), rs.getString("title"), rs.getString("tag"))) {
+						break;
+					}
 				}
 			}
+		}
+		finally {
+			con.setAutoCommit(originalAutoCommit);
+		}
+	}
+	
+	@FunctionalInterface
+	public static interface EdgeComsumer { 
+		public boolean push(Integer num, Integer source, Integer target, Float val);
+	}
+	
+	public void populateEdgesForGraph(Connection con, Integer graphId, EdgeComsumer consumer) throws SQLException {
+		boolean originalAutoCommit = con.getAutoCommit();
+		con.setAutoCommit(false);
+		
+		try (PreparedStatement ps = con.prepareStatement(selectEdgeByGraphID)) {
+			ps.setInt(1, graphId);
+			ps.setFetchSize(dataSource.getCursorFetchSize());
+			
+			try (ResultSet rs = ps.executeQuery()) {
+				while (rs.next()) {
+					if ( ! consumer.push(rs.getInt("pk_num"), rs.getInt("source_node"), rs.getInt("target_node"), rs.getFloat("val"))) {
+						break;
+					}
+				}
+			}
+		}
+		finally {
+			con.setAutoCommit(originalAutoCommit);
 		}
 	}
 	

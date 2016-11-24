@@ -1,8 +1,6 @@
 package org.nunn.gephiserver.graphing.impl;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Map;
 
@@ -19,39 +17,28 @@ public class GraphLogicRootNode extends GraphLogicStd {
 
 	@Override
 	protected void addEdges(Integer graphId, Connection con, ContainerLoader cl, Map<String, Object> graphParam) throws SQLException {
-		Integer rootNodeId = (Integer) graphParam.get("rootNodeId");
-		Double upweight = (Double) graphParam.get("upweight");
-		Double downweight = (Double) graphParam.get("downweight");
+		final Integer rootNodeId = (Integer) graphParam.get("rootNodeId");
+		final Float upweight = (Float) graphParam.get("up_weight");
+		final Float downweight = (Float) graphParam.get("down_weight");
+		final ElementDraft.Factory elementDraftFactory = cl.factory();
 		
-		ElementDraft.Factory elementDraftFactory = cl.factory();
-		
-		PreparedStatement ps = con.prepareStatement("select * from gephi.edge where graph = ?");
-		ps.setInt(1, graphId);
-		
-		ResultSet rs = ps.executeQuery();
-		
-		while (rs.next()) {
-			Integer num = rs.getInt("num");
-			Integer source = rs.getInt("source");
-			Integer target = rs.getInt("target");
-			Double value = rs.getDouble("value");
-			
+		graphDataSource.populateEdgesForGraph(con, graphId, (num, source, target, val) -> {
 			if (rootNodeId.equals(source) || rootNodeId.equals(target)) {
-				value *= upweight;
+				val *= upweight;
 			}
 			else {
-				value *= downweight;
+				val *= downweight;
 			}
 			
 			EdgeDraft ed = elementDraftFactory.newEdgeDraft(num.toString());
 			ed.setSource(cl.getNode(source.toString()));
 			ed.setTarget(cl.getNode(target.toString()));
-			ed.setWeight(value.floatValue());
+			ed.setWeight(val.floatValue());
 			
 			cl.addEdge(ed);
-		}
-		
-		ps.close();
+			
+			return true;
+		});
 	}
 
 }

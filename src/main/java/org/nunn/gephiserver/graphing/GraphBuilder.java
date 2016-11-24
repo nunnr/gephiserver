@@ -65,7 +65,7 @@ public final class GraphBuilder {
 		long resultDiscardMillis = Props.INSTANCE.getPropertyAsLong("resultDiscardMillis", 30000L);
 		resultCache = new ExpiringCache<>(resultDiscardMillis, new FutureExpirationHandler());
 		
-		graphDataSource = new GraphDataSource();
+		graphDataSource = new GraphDataSource(Props.INSTANCE.getPropertyAsString("graphSchema", "gephi"));
 		
 		logicStd = new GraphLogicStd(graphDataSource);
 		logicRoot = new GraphLogicRootNode(graphDataSource);
@@ -78,6 +78,7 @@ public final class GraphBuilder {
 	
 	public void initialize() {
 		LOGGER.debug(() -> graphDataSource.toString());
+		LOGGER.debug("Checking database schema.");
 		graphDataSource.checkSchema();
 		LOGGER.info("Initialize tasks complete.");
 	}

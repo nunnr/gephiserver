@@ -1,8 +1,6 @@
 package org.nunn.gephiserver.graphing.impl;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -18,16 +16,15 @@ import org.gephi.io.importer.api.NodeDraft;
 import org.gephi.io.importer.api.Report;
 import org.nunn.gephiserver.graphing.GraphDataSource;
 import org.nunn.gephiserver.graphing.GraphLogic;
-import org.nunn.gephiserver.system.SqlTools;
 import org.openide.util.Lookup;
 
 public class GraphLogicStd implements GraphLogic {
 	
 	private static final Logger LOGGER = LogManager.getLogger(GraphLogicStd.class);
 
-	private static final Container.Factory CONTAINER_FACTORY = Lookup.getDefault().lookup(Container.Factory.class);
+	protected static final Container.Factory CONTAINER_FACTORY = Lookup.getDefault().lookup(Container.Factory.class);
 	
-	private final GraphDataSource graphDataSource;
+	protected final GraphDataSource graphDataSource;
 	
 	public GraphLogicStd(GraphDataSource graphDataSource) {
 		this.graphDataSource = graphDataSource;
@@ -40,11 +37,10 @@ public class GraphLogicStd implements GraphLogic {
 		Container container = CONTAINER_FACTORY.newContainer();
 		container.setReport(new Report());
 		
-		Connection con = null;
-		try {
-			con = graphDataSource.getConnection();
+		try (Connection con = graphDataSource.getConnection()) {
+			con.setAutoCommit(false);
 		
-			Map<String, Object> graphParam = getGraphParameters(con, graphId);
+			Map<String, Object> graphParam = graphDataSource.getGraphByID(con, graphId);
 			graphParam.putAll(extraParam);
 			
 			ContainerLoader cl = container.getLoader();
@@ -60,30 +56,8 @@ public class GraphLogicStd implements GraphLogic {
 		catch (SQLException e) {
 			throw new RuntimeException(e);
 		}
-		finally {
-			if (con != null) {
-				try {
-					con.close();
-				}
-				catch (SQLException e) {
-					LOGGER.error("Error closing database connection.", e);
-				}
-			}
-		}
 		
 		return container;
-	}
-
-	private Map<String, Object> getGraphParameters(Connection con, Integer id) throws SQLException {
-		PreparedStatement ps = con.prepareStatement("select * from gephi.graph where id = ?");
-		ps.setInt(1, id);
-		
-		ResultSet rs = ps.executeQuery();
-		Map<String, Object> result = SqlTools.convertResultSetToSingle(rs);
-		
-		ps.close();
-		
-		return result;
 	}
 	
 	private void setupDirectedMode(ContainerLoader cl, Map<String, Object> graphParam) {
@@ -100,25 +74,13 @@ public class GraphLogicStd implements GraphLogic {
 	}
 	
 	protected void addNodes(Integer graphId, Connection con, ContainerLoader cl, Map<String, Object> graphParam) throws SQLException {
-		String urlbase = (String) graphParam.get("urlbase");
-		if (urlbase == null) {
-			urlbase = "/";
-		}
+		String urlbaseTmp = (String) graphParam.get("url_base");
 		
-		ElementDraft.Factory elementDraftFactory = cl.factory();
+		final ElementDraft.Factory elementDraftFactory = cl.factory();
+		final Pattern tagSplitter = Pattern.compile(",");
+		final String urlbase = urlbaseTmp == null ? "/" : urlbaseTmp;
 		
-		Pattern tagSplitter = Pattern.compile(",");
-		
-		PreparedStatement ps = con.prepareStatement("select * from gephi.node where graph = ?");
-		ps.setInt(1, graphId);
-		
-		ResultSet rs = ps.executeQuery();
-		
-		while (rs.next()) {
-			Integer num = rs.getInt("num");
-			String name = rs.getString("name");
-			String tag = rs.getString("tag");
-			
+		graphDataSource.populateNodesForGraph(con, graphId, (num, name, tag) -> {
 			String[] tags = tag != null ? tagSplitter.split(tag) : new String[]{};
 			
 			NodeDraft nd = elementDraftFactory.newNodeDraft(num.toString());
@@ -127,34 +89,24 @@ public class GraphLogicStd implements GraphLogic {
 			nd.setValue(KEY_TAG, tags);
 			
 			cl.addNode(nd);
-		}
-		
-		ps.close();
+			
+			return true;
+		});
 	}
 	
 	protected void addEdges(Integer graphId, Connection con, ContainerLoader cl, Map<String, Object> graphParam) throws SQLException {
-		ElementDraft.Factory elementDraftFactory = cl.factory();
+		final ElementDraft.Factory elementDraftFactory = cl.factory();
 		
-		PreparedStatement ps = con.prepareStatement("select * from gephi.edge where graph = ?");
-		ps.setInt(1, graphId);
-		
-		ResultSet rs = ps.executeQuery();
-		
-		while (rs.next()) {
-			Integer num = rs.getInt("num");
-			Integer source = rs.getInt("source");
-			Integer target = rs.getInt("target");
-			Double value = rs.getDouble("value");
-			
+		graphDataSource.populateEdgesForGraph(con, graphId, (num, source, target, val) -> {
 			EdgeDraft ed = elementDraftFactory.newEdgeDraft(num.toString());
 			ed.setSource(cl.getNode(source.toString()));
 			ed.setTarget(cl.getNode(target.toString()));
-			ed.setWeight(value.floatValue());
+			ed.setWeight(val.floatValue());
 			
 			cl.addEdge(ed);
-		}
-		
-		ps.close();
+			
+			return true;
+		});
 	}
 
 }
