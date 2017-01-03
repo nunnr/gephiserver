@@ -1,5 +1,6 @@
 package org.nunn.gephiserver.graphing;
 
+import java.sql.SQLException;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -67,7 +68,7 @@ public final class GraphBuilder {
 		long resultDiscardMillis = Props.INSTANCE.getPropertyAsLong("resultDiscardMillis", 30000L);
 		resultCache = new ExpiringCache<>(resultDiscardMillis, new FutureExpirationHandler());
 		
-		graphDataSource = new GraphDataSource(Props.INSTANCE.getPropertyAsString("graphSchema", "gephi"));
+		graphDataSource = new GraphDataSource();
 		
 		logicStd = new GraphLogicStd(graphDataSource);
 		logicRoot = new GraphLogicRootNode(graphDataSource);
@@ -80,8 +81,14 @@ public final class GraphBuilder {
 	
 	public void initialize() {
 		LOGGER.debug(() -> graphDataSource.toString());
-		LOGGER.debug("Checking database schema.");
-		graphDataSource.checkSchema();
+		try {
+			graphDataSource.checkSchema();
+			LOGGER.debug("Checked database schema: OK");
+		}
+		catch (SQLException e) {
+			LOGGER.debug("Checked database schema: ERROR");
+			throw new RuntimeException(e);
+		}
 		LOGGER.debug("Graph builder init complete.");
 	}
 
@@ -148,6 +155,15 @@ public final class GraphBuilder {
 			graphOutput = (GraphOutput<OT>) result.get();
 		}
 		return graphOutput;
+	}
+
+	public Map<Integer, String> listGraphs() {
+		try {
+			return graphDataSource.listGraphs();
+		}
+		catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
 	}
 	
 }

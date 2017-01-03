@@ -30,6 +30,7 @@ public class MimeType {
 	public static final String APPLICATION_JAVA = "application/java";
 	public static final String APPLICATION_JAVA_BYTE_CODE = "application/java-byte-code";
 	public static final String APPLICATION_JAVASCRIPT = "application/javascript";
+	public static final String APPLICATION_JSON = "application/json";
 	public static final String APPLICATION_LHA = "application/lha";
 	public static final String APPLICATION_LZX = "application/lzx";
 	public static final String APPLICATION_MAC_BINARY = "application/mac-binary";

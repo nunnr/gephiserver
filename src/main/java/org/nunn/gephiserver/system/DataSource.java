@@ -105,7 +105,7 @@ public class DataSource {
 	
 	@Override
 	public String toString() {
-		return String.format("HikariCP pool %s connected to %s %s", ds.getPoolName(), databaseProductName, databaseProductVersion);
+		return String.format("%s %s connected to %s %s", ds.getClass().getSimpleName(), ds.getPoolName(), databaseProductName, databaseProductVersion);
 	}
 	
 	public List<Map<String, Object>> convertResultSetToList(ResultSet rs) throws SQLException {

@@ -19,7 +19,21 @@
 		</header>
 		<div id="graph">
 		</div>
-		<script type="text/javascript">		</script>
+		<script type="text/javascript">
+			$(window).on('load', function() {
+				$.getJSON("rest/graph/list", function(data) {
+					var $select = $('select[name="graphs"]');
+					$.each(data, function(key, val) {
+						$select.append($('<option>', {value:key, text:val}));
+					});
+				});
+				$('form').on('submit', function(){
+					var id = $(this).find('select[name="graphs"] option:selected').val();
+					$('#graph').load('rest/graph/stdSvg', {graphId: id});
+					return false;
+				});
+			});
+		</script>
 		<footer>
 		</footer>
 	</body>

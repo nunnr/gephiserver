@@ -6,37 +6,49 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import org.nunn.gephiserver.Props;
 import org.nunn.gephiserver.system.DataSource;
 
 public class GraphDataSource {
 	
 	private final DataSource dataSource;
-	
+
+	private final String catalog;
 	private final String schema;
 	
+	private final String listGraphs;
 	private final String selectGraphByID;
 	private final String selectNodeByGraphID;
 	private final String selectEdgeByGraphID;
 	
-	public GraphDataSource(String schema) {
-		if (schema == null || schema.isEmpty()) {
-			throw new IllegalArgumentException("Database schema name is required");
+	public GraphDataSource() {
+		this.catalog = Props.INSTANCE.getPropertyAsString("graphCatalog", (String) null);
+		
+		this.schema = Props.INSTANCE.getPropertyAsString("graphSchema", "gephi");
+		if (this.schema.isEmpty()) {
+			throw new IllegalArgumentException("Application property [graphSchema] for database schema name is required");
 		}
-		this.schema = schema;
+		
+		String catschema = this.catalog != null && ! this.catalog.isEmpty() ? this.catalog + "." + this.schema : this.schema;
+		
+		this.listGraphs = "select pk_id, title"
+							+ " from " + catschema + ".graph";
 		this.selectGraphByID = "select pk_id, title, creator, directed, up_weight, down_weight, url_base"
-								+ " from " + schema + ".graph"
+								+ " from " + catschema + ".graph"
 								+ " where pk_id = ?";
 		this.selectNodeByGraphID = "select pk_num, pk_graph, title, tag"
-									+ " from " + schema + ".node"
+									+ " from " + catschema + ".node"
 									+ " where pk_graph = ?";
 		this.selectEdgeByGraphID = "select pk_graph, pk_num, source_node, target_node, val"
-									+ " from " + schema + ".edge"
+									+ " from " + catschema + ".edge"
 									+ " where pk_graph = ?";
-		this.dataSource = new DataSource("GephiServerPool-" + schema);
+		
+		this.dataSource = new DataSource("gephiserver." + catschema);
 	}
 	
 	public Connection getConnection() throws SQLException {
@@ -56,18 +68,30 @@ public class GraphDataSource {
 		return dataSource.toString();
 	}
 	
-	public void checkSchema() {
+	public void checkSchema() throws SQLException {
 		try (Connection con = getConnection()) {
 			DatabaseMetaData dbmd = con.getMetaData();
 			
-			try (ResultSet rs = dbmd.getSchemas(null, schema)) {
-				if ( ! rs.next()) {
-					//throw new RuntimeException("Schema " + schema + " missing!");
+			try (ResultSet rsSchema = dbmd.getSchemas(catalog, schema)) {
+				if ( ! rsSchema.next()) {
+					// Some drivers (e.g. MySQL) return database name as the only schema, and schemas as catalogs
+					try (ResultSet rsCatalog = dbmd.getCatalogs()) {
+						boolean catFound = false;
+						while (rsCatalog.next()) {
+							if (schema.equals(rsCatalog.getString("TABLE_CAT"))) {
+								catFound = true;
+								break;
+							}
+						}
+						if ( ! catFound) {
+							throw new RuntimeException("Schema " + schema + " missing!");
+						}
+					}
 				}
 			}
 			
 			Set<String> gephiTableNames = new HashSet<>();
-			try (ResultSet rs = dbmd.getTables(null, schema, "%", new String[]{"TABLE"})) {
+			try (ResultSet rs = dbmd.getTables(catalog, schema, "%", new String[]{"TABLE"})) {
 				while (rs.next()) {
 					String tableName = rs.getString("TABLE_NAME");
 					gephiTableNames.add(tableName);
@@ -76,9 +100,6 @@ public class GraphDataSource {
 			if ( ! gephiTableNames.containsAll(Arrays.asList("graph", "node", "edge"))) {
 				throw new RuntimeException("Tables missing from " + schema + " schema!");
 			}
-		}
-		catch (SQLException e) {
-			throw new RuntimeException(e);
 		}
 	}
 
@@ -146,6 +167,22 @@ public class GraphDataSource {
 		finally {
 			con.setAutoCommit(originalAutoCommit);
 		}
+	}
+
+	public Map<Integer, String> listGraphs() throws SQLException {
+		Map<Integer, String> result = new HashMap<>();
+		
+		try (Connection con = getConnection()) {
+			try (PreparedStatement ps = con.prepareStatement(listGraphs)) {
+				try (ResultSet rs = ps.executeQuery()) {
+					while (rs.next()) {
+						result.put(rs.getInt("pk_id"), rs.getString("title"));
+					}
+				}
+			}
+		}
+		
+		return result;
 	}
 	
 }
