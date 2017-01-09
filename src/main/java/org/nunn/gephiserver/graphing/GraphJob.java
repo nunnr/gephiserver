@@ -1,6 +1,7 @@
 package org.nunn.gephiserver.graphing;
 
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 
@@ -27,6 +28,8 @@ public class GraphJob<OT> implements Callable<GraphOutput<OT>> {
 	private final GraphExporter<OT> graphExporter;
 	private final Integer graphId;
 	private final Map<String, Object> extraParam;
+
+	public final String uuid;
 	
 	public GraphJob(GraphLogic logicImpl, GraphLayout layoutImpl, GraphExporter<OT> graphExporter, Integer graphId, Map<String, Object> extraParam) {
 		this.logicImpl = logicImpl;
@@ -34,12 +37,13 @@ public class GraphJob<OT> implements Callable<GraphOutput<OT>> {
 		this.graphExporter = graphExporter;
 		this.graphId = graphId;
 		this.extraParam = extraParam;
+		this.uuid = UUID.randomUUID().toString();
 	}
 
 	/** Populate our node and edge data into Gephi Container, import to GraphModel, then export to final format. */
 	@Override
 	public GraphOutput<OT> call() throws Exception {
-		long started = System.currentTimeMillis();
+		long startedTime = System.currentTimeMillis();
 		
 		GraphOutput<OT> result;
 		
@@ -76,7 +80,7 @@ public class GraphJob<OT> implements Callable<GraphOutput<OT>> {
 				LOGGER.warn("Workspace cleanup failed", e);
 			}
 			
-			LOGGER.info("Completed Gephi job in {} msec", System.currentTimeMillis() - started);
+			LOGGER.info("Graph job ran for {} msec", System.currentTimeMillis() - startedTime);
 		}
 		
 		return result;
@@ -84,6 +88,7 @@ public class GraphJob<OT> implements Callable<GraphOutput<OT>> {
 	
 	private void checkInterrupted() throws CancellationException {
 		if (Thread.interrupted()) {
+			LOGGER.warn("Graph job interrupted");
 			throw new CancellationException("Job interrupted");
 		}
 	}

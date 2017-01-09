@@ -11,6 +11,8 @@ SVG and PDF response
 Usage
 ---
 
+http://localhost:8080/gephiserver
+
 Synchronous
 
 http://localhost:8080/gephiserver/rest/graph/stdSvg?graphId=1

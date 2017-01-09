@@ -3,10 +3,8 @@ package org.nunn.gephiserver.graphing;
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -34,9 +32,7 @@ public final class GraphBuilder {
 	/** max msec wait time for clients - we wait() the user request thread whilst rendering */
 	private static final long MAX_REQUEST_JOB_WAIT = Props.INSTANCE.getPropertyAsLong("maxRequestJobWait", 5000L);
 	
-	private final int jobQueueLength;
-	private final BlockingQueue<Runnable> jobQueue;
-	private final ExecutorService executorService;
+	private final ThreadPoolExecutor executorService;
 	private final ExpiringCache<String, Future<?>> resultCache;
 	
 	private final GraphDataSource graphDataSource;
@@ -47,26 +43,22 @@ public final class GraphBuilder {
 	public final GraphExporterSVG exporterSvg;
 	public final GraphExporterPDF exporterPdf;
 	
-	private static class FutureExpirationHandler implements ExpiringCache.ExpirationEventHandler<String, Future<?>> {
-		@Override
-		public void onExpiration(String key, Future<?> evictedEntry) {
-			evictedEntry.cancel(true);
-			LOGGER.debug("Job {} expired before completion", key);
-		}
-	}
-	
 	public static final GraphBuilder INSTANCE = new GraphBuilder();
 	
 	private GraphBuilder() {
-		/** length of pending jobs queue */
-		jobQueueLength = Props.INSTANCE.getPropertyAsInteger("jobQueueLength", 10);
-		jobQueue = new ArrayBlockingQueue<>(jobQueueLength);
+		executorService = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+				new ArrayBlockingQueue<Runnable>(Props.INSTANCE.getPropertyAsInteger("jobQueueLength", 10))
+		);
+		executorService.prestartAllCoreThreads();
 		
-		executorService = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, jobQueue);
-		
-		/** msec wait time for a client to take an async result before it is discarded */
-		long resultDiscardMillis = Props.INSTANCE.getPropertyAsLong("resultDiscardMillis", 30000L);
-		resultCache = new ExpiringCache<>(resultDiscardMillis, new FutureExpirationHandler());
+		resultCache = new ExpiringCache<>(
+				Props.INSTANCE.getPropertyAsLong("resultDiscardMillis", 30000L),
+				(key, evictedEntry) -> {
+					evictedEntry.cancel(true);
+					executorService.purge();
+					LOGGER.debug("Job {} expired before completion", key);
+				}
+		);
 		
 		graphDataSource = new GraphDataSource();
 		
@@ -101,8 +93,16 @@ public final class GraphBuilder {
 	}
 	
 	private <OT> Future<GraphOutput<OT>> submit(GraphJob<OT> graphJob) {
-		Future<GraphOutput<OT>> future = executorService.submit(graphJob);
-		LOGGER.info("Queue filled {} of {}", jobQueue.size(), jobQueueLength);
+		Future<GraphOutput<OT>> future;
+		executorService.purge();
+		try {
+			future = executorService.submit(graphJob);
+			LOGGER.info("Job queue remaing capacity: {}", executorService.getQueue().remainingCapacity());
+		}
+		catch (RejectedExecutionException e) {
+			LOGGER.warn("Rejected graph job {}", graphJob.uuid);
+			throw e;
+		}
 		return future;
 	}
 	
@@ -110,15 +110,15 @@ public final class GraphBuilder {
 			throws RejectedExecutionException, CancellationException, TimeoutException, InterruptedException, ExecutionException {
 		
 		GraphJob<OT> graphJob = new GraphJob<>(graphType, graphLayout, graphExporter, graphId, extraParam);
-		
 		Future<GraphOutput<OT>> future = submit(graphJob);
-		
 		GraphOutput<OT> result;
 		try {
 			result = future.get(MAX_REQUEST_JOB_WAIT, TimeUnit.MILLISECONDS);
 		}
 		catch (CancellationException | TimeoutException | InterruptedException | ExecutionException e) {
 			future.cancel(true);
+			executorService.purge();
+			LOGGER.warn("{} on sync graph job {}", e.getClass().getSimpleName(), graphJob.uuid);
 			throw e;
 		}
 		return result;
@@ -127,7 +127,7 @@ public final class GraphBuilder {
 	public <OT> String doGraphAsync(GraphLogic graphType, GraphLayout graphLayout, GraphExporter<OT> graphExporter, Integer graphId, Map<String, Object> extraParam)
 			throws RejectedExecutionException {
 		
-		GraphJobAsync<OT> graphJobAsync = new GraphJobAsync<>(graphType, graphLayout, graphExporter, graphId, extraParam);
+		GraphJob<OT> graphJobAsync = new GraphJob<>(graphType, graphLayout, graphExporter, graphId, extraParam);
 		Future<GraphOutput<OT>> future = submit(graphJobAsync);
 		resultCache.put(graphJobAsync.uuid, future);
 		return graphJobAsync.uuid;

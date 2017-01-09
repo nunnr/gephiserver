@@ -2,7 +2,7 @@
 <Configuration status="INFO" xmlns="log4j2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="log4j2 classpath:Log4j-config.xsd">
 	<Appenders>
 		<Console name="Console" target="SYSTEM_OUT">
-			<PatternLayout charset="UTF-8" pattern="%date{yyyy-MM-dd HH:mm:ss} %-5level (%file:%line) %message%n"/>
+			<PatternLayout charset="UTF-8" pattern="%date{yyyy-MM-dd HH:mm:ss} %highlight{%-5level} (%logger{1}) %message%n"/>
 		</Console>
 		<RollingFile name="Roll" immediateFlush="false" fileName="/var/log/gephiserver.log" filePattern="/var/log/$${date:yyyy-MM}/gephiserver-%d{yyyy-MM-dd-HH}-%i.log.gz">
 			<PatternLayout charset="UTF-8" pattern="%date{yyyy-MM-dd HH:mm:ss} %-5level (%file:%line) %message%n"/>
@@ -13,7 +13,7 @@
 		</RollingFile>
 		<Async name="Async" includeLocation="true">
 			<AppenderRef ref="Console"/>
-			<AppenderRef ref="Roll"/>
+			<!-- AppenderRef ref="Roll"/ -->
 		</Async>
 	</Appenders>
 	<Loggers>

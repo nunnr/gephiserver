@@ -21,9 +21,9 @@ import org.openide.util.Lookup;
 public class GraphLogicStd implements GraphLogic {
 	
 	private static final Logger LOGGER = LogManager.getLogger(GraphLogicStd.class);
-
-	protected static final Container.Factory CONTAINER_FACTORY = Lookup.getDefault().lookup(Container.Factory.class);
 	
+	protected static final Pattern TAG_SPLITTER = Pattern.compile(",");
+	protected static final Container.Factory CONTAINER_FACTORY = Lookup.getDefault().lookup(Container.Factory.class);
 	protected final GraphDataSource graphDataSource;
 	
 	public GraphLogicStd(GraphDataSource graphDataSource) {
@@ -77,11 +77,10 @@ public class GraphLogicStd implements GraphLogic {
 		String urlbaseTmp = (String) graphParam.get("url_base");
 		
 		final ElementDraft.Factory elementDraftFactory = cl.factory();
-		final Pattern tagSplitter = Pattern.compile(",");
 		final String urlbase = urlbaseTmp == null ? "/" : urlbaseTmp;
 		
 		graphDataSource.populateNodesForGraph(con, graphId, (num, name, tag) -> {
-			String[] tags = tag != null ? tagSplitter.split(tag) : new String[]{};
+			String[] tags = tag != null ? TAG_SPLITTER.split(tag) : new String[]{};
 			
 			NodeDraft nd = elementDraftFactory.newNodeDraft(num.toString());
 			nd.setLabel(name);

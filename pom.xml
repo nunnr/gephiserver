@@ -7,7 +7,7 @@
 
 	<groupId>org.nunn.gephiserver</groupId>
 	<artifactId>gephiserver</artifactId>
-	<version>1.6.0-SNAPSHOT</version>
+	<version>1.7.0-SNAPSHOT</version>
 	<packaging>war</packaging>
 
 	<name>gephiserver</name>
@@ -142,7 +142,6 @@
 			<groupId>org.apache.logging.log4j</groupId>
 			<artifactId>log4j-web</artifactId>
 			<version>${log4j.version}</version>
-			<scope>runtime</scope>
 		</dependency>
 		
 		<dependency>

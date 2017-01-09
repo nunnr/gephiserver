@@ -31,7 +31,7 @@ public class Graph {
 	public String stdSvg(@FormParam("graphId") Integer graphId) throws Exception {
 		Map<String, Object> extraParam = Collections.<String, Object>emptyMap();
 		GraphOutput<StringBuilderWriter> result = GraphBuilder.INSTANCE.doGraph(GraphBuilder.INSTANCE.logicStd, GraphBuilder.INSTANCE.layoutStd, GraphBuilder.INSTANCE.exporterSvg, graphId, extraParam);
-		return result.getOutput().toString();
+		return result.output.toString();
 	}
 	
 	@POST
@@ -40,7 +40,7 @@ public class Graph {
 	public String rootySvg(@FormParam("graphId") Integer graphId, @FormParam("rootNodeId") int rootNodeId) throws Exception {
 		Map<String, Object> extraParam = Collections.<String, Object>singletonMap("rootNodeId", rootNodeId);
 		GraphOutput<StringBuilderWriter> result = GraphBuilder.INSTANCE.doGraph(GraphBuilder.INSTANCE.logicRoot, GraphBuilder.INSTANCE.layoutStd, GraphBuilder.INSTANCE.exporterSvg, graphId, extraParam);
-		return result.getOutput().toString();
+		return result.output.toString();
 	}
 	
 	@POST
@@ -64,7 +64,7 @@ public class Graph {
 	@Produces({MimeType.APPLICATION_SVG_XML, MimeType.TEXT_HTML})
 	public String getSvgAsyncResult(@FormParam("uuid") String uuid) throws Exception {
 		GraphOutput<StringBuilderWriter> result = GraphBuilder.INSTANCE.getAsyncResult(uuid);
-		return result != null ? result.getOutput().toString() : null;
+		return result != null ? result.output.toString() : null;
 	}
 	
 	@POST
@@ -73,7 +73,7 @@ public class Graph {
 	public byte[] stdPdf(@FormParam("graphId") Integer graphId) throws Exception {
 		Map<String, Object> extraParam = Collections.<String, Object>emptyMap();
 		GraphOutput<ByteArrayOutputStream> result = GraphBuilder.INSTANCE.doGraph(GraphBuilder.INSTANCE.logicStd, GraphBuilder.INSTANCE.layoutStd, GraphBuilder.INSTANCE.exporterPdf, graphId, extraParam);;
-		return result.getOutput().toByteArray();
+		return result.output.toByteArray();
 	}
 	
 	@POST
@@ -82,7 +82,7 @@ public class Graph {
 	public byte[] rootyPdf(@FormParam("graphId") Integer graphId, @FormParam("rootNodeId") int rootNodeId) throws Exception {
 		Map<String, Object> extraParam = Collections.<String, Object>singletonMap("rootNodeId", rootNodeId);
 		GraphOutput<ByteArrayOutputStream> result = GraphBuilder.INSTANCE.doGraph(GraphBuilder.INSTANCE.logicRoot, GraphBuilder.INSTANCE.layoutStd, GraphBuilder.INSTANCE.exporterPdf, graphId, extraParam);;
-		return result.getOutput().toByteArray();
+		return result.output.toByteArray();
 	}
 	
 	@POST
@@ -106,7 +106,7 @@ public class Graph {
 	@Produces({MimeType.APPLICATION_PDF})
 	public byte[] getPdfAsyncResult(@FormParam("uuid") String uuid) throws Exception {
 		GraphOutput<ByteArrayOutputStream> result = GraphBuilder.INSTANCE.getAsyncResult(uuid);
-		return result != null ? result.getOutput().toByteArray() : null;
+		return result != null ? result.output.toByteArray() : null;
 	}
 	
 }
