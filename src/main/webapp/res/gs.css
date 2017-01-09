@@ -44,3 +44,10 @@ table {
 	border-collapse: collapse;
 	border-spacing: 0;
 }
+
+#graph {
+	padding: 1em;
+}
+#graph > svg {
+	width: 100%;
+}
