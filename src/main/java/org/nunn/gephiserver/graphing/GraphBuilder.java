@@ -131,10 +131,9 @@ public final class GraphBuilder {
 		return graphJobAsync.uuid;
 	}
 	
-	public boolean isAsyncGraphRendered(String uuid) throws CancellationException {
-		Future<?> result = resultCache.get(uuid);
+	private boolean resultIsDone(Future<?> result) {
 		if (result == null) {
-			throw new CancellationException("No result matches given uuid.");
+			throw new CancellationException("No result found.");
 		}
 		if (result.isCancelled()) {
 			throw new CancellationException("Job was cancelled.");
@@ -142,14 +141,16 @@ public final class GraphBuilder {
 		return result.isDone();
 	}
 	
+	public boolean isAsyncGraphRendered(String uuid) throws CancellationException {
+		return resultIsDone(resultCache.get(uuid));
+	}
+	
 	@SuppressWarnings("unchecked")
 	public <OT> GraphOutput<OT> getAsyncResult(String uuid) throws CancellationException, InterruptedException, ExecutionException {
 		GraphOutput<OT> graphOutput = null;
-		if (isAsyncGraphRendered(uuid)) {
-			Future<?> result = resultCache.remove(uuid);
-			if (result == null) {
-				throw new CancellationException("No result matches given uuid.");
-			}
+		Future<?> result = resultCache.get(uuid);
+		if (resultIsDone(result)) {
+			resultCache.remove(uuid);
 			graphOutput = (GraphOutput<OT>) result.get();
 		}
 		return graphOutput;
