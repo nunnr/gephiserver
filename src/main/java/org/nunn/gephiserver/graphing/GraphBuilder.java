@@ -29,14 +29,10 @@ public final class GraphBuilder {
 	
 	private static final Logger LOGGER = LogManager.getLogger(GraphBuilder.class);
 	
-	/** max msec wait time for clients - we wait() the user request thread whilst rendering */
-	private static final long MAX_REQUEST_JOB_WAIT = Props.INSTANCE.getPropertyAsLong("maxRequestJobWait", 5000L);
-	
+	private final long jobTimeout;
 	private final ThreadPoolExecutor executorService;
 	private final ExpiringCache<String, Future<?>> resultCache;
-	
 	private final GraphDataSource graphDataSource;
-	
 	public final GraphLogic logicStd;
 	public final GraphLogic logicRoot;
 	public final GraphLayout layoutStd;
@@ -46,13 +42,15 @@ public final class GraphBuilder {
 	public static final GraphBuilder INSTANCE = new GraphBuilder();
 	
 	private GraphBuilder() {
+		jobTimeout = Props.INSTANCE.getPropertyAsLong("jobTimeout", 5000L);
+		
 		executorService = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
 				new ArrayBlockingQueue<Runnable>(Props.INSTANCE.getPropertyAsInteger("jobQueueLength", 10))
 		);
 		executorService.prestartAllCoreThreads();
 		
 		resultCache = new ExpiringCache<>(
-				Props.INSTANCE.getPropertyAsLong("resultDiscardMillis", 30000L),
+				jobTimeout + Props.INSTANCE.getPropertyAsLong("resultDiscardMillis", 30000L),
 				(key, evictedEntry) -> {
 					evictedEntry.cancel(true);
 					executorService.purge();
@@ -113,7 +111,7 @@ public final class GraphBuilder {
 		Future<GraphOutput<OT>> future = submit(graphJob);
 		GraphOutput<OT> result;
 		try {
-			result = future.get(MAX_REQUEST_JOB_WAIT, TimeUnit.MILLISECONDS);
+			result = future.get(jobTimeout, TimeUnit.MILLISECONDS);
 		}
 		catch (CancellationException | TimeoutException | InterruptedException | ExecutionException e) {
 			future.cancel(true);
