@@ -55,55 +55,64 @@ public class Props {
 				loc = parent;
 			}
 			
-			InputStream ins = null;
-			try {
-				String confDir = System.getProperty(APP_CONF_DIR_PROPERTY_NAME);
-				if (confDir == null) {
-					confDir = APP_PROPS_DIRECTORY;
-				}
-				File appPropsSource = new File(confDir + "/" + APP_PROPS_FILE_NAME);
-				if (appPropsSource.canRead()) {
-					LOGGER.info("Found {}: {}", APP_PROPS_FILE_NAME, appPropsSource);
-					ins = new FileInputStream(appPropsSource);
-				}
-				else {
-					appPropsSource = loc.resolve(APP_PROPS_FILE_NAME).toFile();
-					if (appPropsSource.canRead()) {
-						LOGGER.info("Found {}: {}", APP_PROPS_FILE_NAME, appPropsSource);
-						ins = new FileInputStream(appPropsSource);
-					}
-					else {
-						LOGGER.info("Searching classpath for {}...", APP_PROPS_FILE_NAME);
-						ClassLoader cl = Thread.currentThread().getContextClassLoader();
-						ins = cl.getResourceAsStream(APP_PROPS_FILE_NAME);
-					}
-				}
-				
-				if (ins != null) {
-					props.load(ins);
-				}
-				else {
-					throw new FileNotFoundException(APP_PROPS_FILE_NAME + " file not found. Default location is in "
-							+ APP_PROPS_DIRECTORY + " directory. Specify a custom config directory with "
-							+ APP_CONF_DIR_PROPERTY_NAME + " system property.");
-				}
-			}
-			finally {
-				if (ins != null) {
-					try {
-						ins.close();
-					}
-					catch (IOException e) {
-						LOGGER.debug("Close failed", e);
-					}
-				}
-			}
+			loadProperties(loc);
 		}
 		catch (InvalidPathException | URISyntaxException | IOException e) {
 			throw new RuntimeException("Application properties file could not be loaded.", e);
 		}
 		
 		appLocation = loc;
+	}
+	
+	private synchronized void loadProperties(Path loc) throws IOException {
+		InputStream ins = null;
+		try {
+			String confDir = System.getProperty(APP_CONF_DIR_PROPERTY_NAME);
+			if (confDir == null) {
+				confDir = APP_PROPS_DIRECTORY;
+			}
+			File appPropsSource = new File(confDir + "/" + APP_PROPS_FILE_NAME);
+			if (appPropsSource.canRead()) {
+				LOGGER.info("Found {}: {}", APP_PROPS_FILE_NAME, appPropsSource);
+				ins = new FileInputStream(appPropsSource);
+			}
+			else {
+				appPropsSource = loc.resolve(APP_PROPS_FILE_NAME).toFile();
+				if (appPropsSource.canRead()) {
+					LOGGER.info("Found {}: {}", APP_PROPS_FILE_NAME, appPropsSource);
+					ins = new FileInputStream(appPropsSource);
+				}
+				else {
+					LOGGER.info("Searching classpath for {}...", APP_PROPS_FILE_NAME);
+					ClassLoader cl = Thread.currentThread().getContextClassLoader();
+					ins = cl.getResourceAsStream(APP_PROPS_FILE_NAME);
+				}
+			}
+			
+			if (ins != null) {
+				props.load(ins);
+			}
+			else {
+				throw new FileNotFoundException(APP_PROPS_FILE_NAME + " file not found. Default location is in "
+						+ APP_PROPS_DIRECTORY + " directory. Specify a custom config directory with "
+						+ APP_CONF_DIR_PROPERTY_NAME + " system property.");
+			}
+		}
+		finally {
+			if (ins != null) {
+				try {
+					ins.close();
+				}
+				catch (IOException e) {
+					LOGGER.debug("Close failed", e);
+				}
+			}
+		}
+	}
+	
+	public synchronized void reloadProperties() throws IOException {
+		props.clear();
+		loadProperties(appLocation);
 	}
 	
 	public Path getAppLocation() {
