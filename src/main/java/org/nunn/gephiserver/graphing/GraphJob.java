@@ -42,7 +42,7 @@ public class GraphJob<OT> implements Callable<GraphOutput<OT>> {
 
 	/** Populate our node and edge data into Gephi Container, import to GraphModel, then export to final format. */
 	@Override
-	public GraphOutput<OT> call() throws Exception {
+	public GraphOutput<OT> call() throws CancellationException {
 		long startedTime = System.currentTimeMillis();
 		
 		GraphOutput<OT> result;
@@ -71,6 +71,10 @@ public class GraphJob<OT> implements Callable<GraphOutput<OT>> {
 			
 			result = new GraphOutput<>(output);
 		}
+		catch (InterruptedException e) {
+			LOGGER.debug("Graph job interrupted");
+			throw new CancellationException("Graph job interrupted during processing");
+		}
 		finally {
 			try {
 				PROJECT_CONTROLLER.closeCurrentWorkspace();
@@ -80,16 +84,15 @@ public class GraphJob<OT> implements Callable<GraphOutput<OT>> {
 				LOGGER.warn("Workspace cleanup failed", e);
 			}
 			
-			LOGGER.info("Graph job ran for {} msec", System.currentTimeMillis() - startedTime);
+			LOGGER.info("Graph job {} ran for {} msec", uuid, System.currentTimeMillis() - startedTime);
 		}
 		
 		return result;
 	}
 	
-	private void checkInterrupted() throws CancellationException {
+	private void checkInterrupted() throws InterruptedException {
 		if (Thread.interrupted()) {
-			LOGGER.warn("Graph job interrupted");
-			throw new CancellationException("Job interrupted");
+			throw new InterruptedException();
 		}
 	}
 	
