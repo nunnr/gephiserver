@@ -39,7 +39,7 @@ public class ExpiringCache<TKey, TValue> {
 	private volatile boolean runCleaner;
 	
 	public ExpiringCache(long lifetimeMillis, ExpirationEventHandler<TKey, TValue> expirationEventHandler, boolean enableExpiry) {
-		this.cache = new LinkedHashMap<TKey, CacheEntry>();
+		this.cache = new LinkedHashMap<>();
 		if (lifetimeMillis < 1) {
 			throw new IllegalArgumentException("The lifetimeMillis argument must be greater than 1.");
 		}

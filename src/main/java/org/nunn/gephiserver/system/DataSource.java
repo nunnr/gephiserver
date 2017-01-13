@@ -127,7 +127,7 @@ public class DataSource {
 	public Map<String, Object> convertResultSetToSingleMap(ResultSet rs) throws SQLException {
 		ResultSetMetaData md = rs.getMetaData();
 		int columns = md.getColumnCount();
-		Map<String, Object> row = new HashMap<String, Object>(columns);
+		Map<String, Object> row = new HashMap<>(columns);
 
 		if (rs.next()) {
 			for (int i = 1; i <= columns; i++) {

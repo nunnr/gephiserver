@@ -9,7 +9,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gephi.io.importer.api.Container;
 import org.gephi.io.importer.api.ImportController;
-import org.gephi.io.processor.plugin.DefaultProcessor;
+import org.gephi.io.processor.spi.Processor;
 import org.gephi.project.api.ProjectController;
 import org.gephi.project.api.Workspace;
 import org.openide.util.Lookup;
@@ -21,7 +21,7 @@ public class GraphJob<OT> implements Callable<GraphOutput<OT>> {
 	
 	protected static final ProjectController PROJECT_CONTROLLER = Lookup.getDefault().lookup(ProjectController.class);
 	protected static final ImportController IMPORT_CONTROLLER = Lookup.getDefault().lookup(ImportController.class);
-	protected static final DefaultProcessor DEFAULT_PROCESSOR = new DefaultProcessor();
+	protected static final Processor DEFAULT_PROCESSOR = Lookup.getDefault().lookup(Processor.class);
 	
 	private final GraphLogic logicImpl;
 	private final GraphLayout layoutImpl;
