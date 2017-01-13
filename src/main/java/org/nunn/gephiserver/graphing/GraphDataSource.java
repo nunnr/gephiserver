@@ -68,52 +68,47 @@ public class GraphDataSource {
 		return dataSource.toString();
 	}
 	
-	public void checkSchema() throws SQLException {
-		try (Connection con = getConnection()) {
-			DatabaseMetaData dbmd = con.getMetaData();
-			
-			try (ResultSet rsSchema = dbmd.getSchemas(catalog, schema)) {
-				if ( ! rsSchema.next()) {
-					// Some drivers (e.g. MySQL) return database name as the only schema, and schemas as catalogs
-					try (ResultSet rsCatalog = dbmd.getCatalogs()) {
-						boolean catFound = false;
-						while (rsCatalog.next()) {
-							if (schema.equals(rsCatalog.getString("TABLE_CAT"))) {
-								catFound = true;
-								break;
-							}
+	public void checkSchema(Connection con) throws SQLException {
+		DatabaseMetaData dbmd = con.getMetaData();
+		
+		try (ResultSet rsSchema = dbmd.getSchemas(catalog, schema)) {
+			if ( ! rsSchema.next()) {
+				// Some drivers (e.g. MySQL) return database name as the only schema, and schemas as catalogs
+				try (ResultSet rsCatalog = dbmd.getCatalogs()) {
+					boolean catFound = false;
+					while (rsCatalog.next()) {
+						if (schema.equals(rsCatalog.getString("TABLE_CAT"))) {
+							catFound = true;
+							break;
 						}
-						if ( ! catFound) {
-							throw new RuntimeException("Schema " + schema + " missing!");
-						}
+					}
+					if ( ! catFound) {
+						throw new RuntimeException("Schema " + schema + " missing!");
 					}
 				}
 			}
-			
-			Set<String> gephiTableNames = new HashSet<>();
-			try (ResultSet rs = dbmd.getTables(catalog, schema, "%", new String[]{"TABLE"})) {
-				while (rs.next()) {
-					String tableName = rs.getString("TABLE_NAME");
-					gephiTableNames.add(tableName);
-				}
+		}
+		
+		Set<String> gephiTableNames = new HashSet<>();
+		try (ResultSet rs = dbmd.getTables(catalog, schema, "%", new String[]{"TABLE"})) {
+			while (rs.next()) {
+				String tableName = rs.getString("TABLE_NAME");
+				gephiTableNames.add(tableName);
 			}
-			if ( ! gephiTableNames.containsAll(Arrays.asList("graph", "node", "edge"))) {
-				throw new RuntimeException("Tables missing from " + schema + " schema!");
-			}
+		}
+		if ( ! gephiTableNames.containsAll(Arrays.asList("graph", "node", "edge"))) {
+			throw new RuntimeException("Tables missing from " + schema + " schema!");
 		}
 	}
 
 	public Map<String, Object> getGraphByID(Connection con, Integer id) throws SQLException {
 		Map<String, Object> result;
-		
 		try (PreparedStatement ps = con.prepareStatement(selectGraphByID)) {
 			ps.setInt(1, id);
-			
 			try (ResultSet rs = ps.executeQuery()) {
 				result = dataSource.convertResultSetToSingleMap(rs);
 			}
 		}
-		
 		return result;
 	}
 	
@@ -169,19 +164,15 @@ public class GraphDataSource {
 		}
 	}
 
-	public Map<Integer, String> listGraphs() throws SQLException {
+	public Map<Integer, String> listGraphs(Connection con) throws SQLException {
 		Map<Integer, String> result = new HashMap<>();
-		
-		try (Connection con = getConnection()) {
-			try (PreparedStatement ps = con.prepareStatement(listGraphs)) {
-				try (ResultSet rs = ps.executeQuery()) {
-					while (rs.next()) {
-						result.put(rs.getInt("pk_id"), rs.getString("title"));
-					}
+		try (PreparedStatement ps = con.prepareStatement(listGraphs)) {
+			try (ResultSet rs = ps.executeQuery()) {
+				while (rs.next()) {
+					result.put(rs.getInt("pk_id"), rs.getString("title"));
 				}
 			}
 		}
-		
 		return result;
 	}
 	

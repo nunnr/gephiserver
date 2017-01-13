@@ -1,5 +1,6 @@
 package org.nunn.gephiserver.graphing;
 
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -59,6 +60,7 @@ public final class GraphBuilder {
 		);
 		
 		graphDataSource = new GraphDataSource();
+		LOGGER.debug(() -> graphDataSource.toString());
 		
 		logicStd = new GraphLogicStd(graphDataSource);
 		logicRoot = new GraphLogicRootNode(graphDataSource);
@@ -67,19 +69,6 @@ public final class GraphBuilder {
 		exporterPdf = new GraphExporterPDF();
 		
 		LOGGER.debug("GraphBuilder instance created");
-	}
-	
-	public void initialize() {
-		LOGGER.debug(() -> graphDataSource.toString());
-		try {
-			graphDataSource.checkSchema();
-			LOGGER.debug("Checked database schema: OK");
-		}
-		catch (SQLException e) {
-			LOGGER.debug("Checked database schema: ERROR");
-			throw new RuntimeException(e);
-		}
-		LOGGER.debug("Graph builder init complete.");
 	}
 
 	public void destroy() {
@@ -157,10 +146,21 @@ public final class GraphBuilder {
 	}
 
 	public Map<Integer, String> listGraphs() {
-		try {
-			return graphDataSource.listGraphs();
+		try (Connection con = graphDataSource.getConnection()) {
+			return graphDataSource.listGraphs(con);
 		}
 		catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
+	}
+	
+	public void checkDatasource() {
+		try (Connection con = graphDataSource.getConnection()) {
+			graphDataSource.checkSchema(con);
+			LOGGER.debug("Checked database schema: OK");
+		}
+		catch (SQLException e) {
+			LOGGER.warn("Checked database schema: ERROR. Setup SQL script may need to be run.");
 			throw new RuntimeException(e);
 		}
 	}
