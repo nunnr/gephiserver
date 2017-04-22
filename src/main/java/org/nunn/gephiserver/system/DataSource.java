@@ -39,7 +39,6 @@ public class DataSource {
 		HikariConfig config = new HikariConfig();
 		
 		config.setPoolName(name);
-		config.setInitializationFailFast(true);
 		config.setDataSourceClassName(Props.INSTANCE.getPropertyAsString("dataSource.className", ()->{throw new RuntimeException("No dataSourceClassName set!");}));
 		config.setMaximumPoolSize(Props.INSTANCE.getPropertyAsInteger("dataSource.maximumPoolSize", 5));
 		config.setConnectionTimeout(Props.INSTANCE.getPropertyAsLong("dataSource.connectionTimeout", 5000L));
