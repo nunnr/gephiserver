@@ -10,16 +10,10 @@ public class ExpiringCache<TKey, TValue> {
 	/** Implement this interface to have code executed whenever a cache entry expires */
 	public static interface ExpirationEventHandler<TKeyExpired, TValueExpired> {
 		/** Method called on expiration.
+		 * Implementations should perform work on a separate thread, to minimise lock time on this cache.
 		 * @param key The key of the cache data that has been evicted.
 		 * @param data The cache data that has been evicted. */
 		void onExpiration(TKeyExpired key, TValueExpired data);
-	}
-	
-	private class ExpirationEventHandlerNoOp implements ExpirationEventHandler<TKey, TValue> {
-		@Override
-		public void onExpiration(TKey key, TValue data) {
-			// default implementation does nothing
-		}
 	}
 	
 	private class CacheEntry {
@@ -44,7 +38,7 @@ public class ExpiringCache<TKey, TValue> {
 			throw new IllegalArgumentException("The lifetimeMillis argument must be greater than 1.");
 		}
 		this.lifetimeMillis = lifetimeMillis;
-		this.expirationEventHandler = expirationEventHandler != null ? expirationEventHandler : new ExpirationEventHandlerNoOp();
+		this.expirationEventHandler = expirationEventHandler != null ? expirationEventHandler : (key, data) -> {};
 		if (enableExpiry) {
 			enableExpiry();
 		}
@@ -166,14 +160,9 @@ public class ExpiringCache<TKey, TValue> {
 						if (Thread.interrupted()) {
 							throw new InterruptedException();
 						}
-						if (cache.isEmpty()) { // nothing to do, so wait
-							cache.wait(); // will be notified when item next added
-						}
-						else { // may be expired items, perform clean up
-							long diff = cleanup();
-							if (diff > 0) {
-								cache.wait(diff); // wake self up when last tested item expired
-							}
+						long diff = cleanup();
+						if (diff > -1) {
+							cache.wait(diff); // wake self up when last tested item expired
 						}
 					}
 					catch (InterruptedException ex) {
