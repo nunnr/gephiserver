@@ -1,40 +1,38 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<web-app version="3.1" id="gephi-server"
+<web-app version="3.1" id="gephi-web-demo"
 	xmlns="http://xmlns.jcp.org/xml/ns/javaee"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
 						http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd">
 	
-	<display-name>gephi-server</display-name>
+	<display-name>gephi-web-demo</display-name>
 	
-	<servlet>
-		<servlet-name>Jersey REST Service</servlet-name>
-		<servlet-class>org.glassfish.jersey.servlet.ServletContainer</servlet-class>
-		<init-param>
-			<param-name>jersey.config.server.provider.packages</param-name>
-			<param-value>org.nunn.gephiserver.server</param-value>
-		</init-param>
-		<load-on-startup>1</load-on-startup>
-	</servlet>
 	<servlet-mapping>
-		<servlet-name>Jersey REST Service</servlet-name>
-		<url-pattern>/rest/*</url-pattern>
+		<servlet-name>default</servlet-name>
+		<url-pattern>*.js</url-pattern>
+		<url-pattern>*.css</url-pattern>
+		<url-pattern>*.jpg</url-pattern>
 	</servlet-mapping>
 	
 	<welcome-file-list>
-		<welcome-file>/info.jsp</welcome-file>
+		<welcome-file>/index.jsp</welcome-file>
 	</welcome-file-list>
 	
 	<deny-uncovered-http-methods/>
 	<security-constraint>
 		<web-resource-collection>
-			<web-resource-name>gephi-server</web-resource-name>
+			<web-resource-name>gephiserver-web-demo</web-resource-name>
 			<url-pattern></url-pattern>		
 			<http-method>GET</http-method>
 			<http-method>POST</http-method>
 		</web-resource-collection>
 	</security-constraint>
+
+	<error-page>
+		<exception-type>java.lang.Throwable</exception-type>
+		<location>/error.jsp</location>
+	</error-page>
 	
 	<jsp-config>
 		<jsp-property-group>
