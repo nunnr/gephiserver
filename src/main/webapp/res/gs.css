@@ -1,3 +1,5 @@
+@CHARSET "UTF-8";
+
 *, *::before, *::after {
 	box-sizing: border-box;
 }
@@ -44,10 +46,47 @@ table {
 	border-collapse: collapse;
 	border-spacing: 0;
 }
+h1 {
+	font-size: 160%;
+}
+h2 {
+	font-size: 130%;
+}
+h3 {
+	font-size: 120%;
+}
+h4 {
+	font-size: 115%;
+}
+h5 {
+	font-size: 110%;
+}
+h6 {
+	font-size: 105%;
+}
+
+.spin {
+	display: block;
+	width: 1em;
+	position: absolute;
+	animation-name: spin;
+	animation-duration: 4000ms;
+	animation-iteration-count: infinite;
+	animation-timing-function: linear;
+}
+@keyframes spin {
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(359deg);
+	}
+}
 
 #graph {
-	padding: 1em;
+	background: #ffffff url("bg.jpg") no-repeat center center fixed;
+	background-size: 100% 100%;
 }
 #graph > svg {
-	width: 100%;
+	
 }

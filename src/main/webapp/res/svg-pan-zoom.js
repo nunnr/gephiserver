@@ -1,4 +1,4 @@
-// svg-pan-zoom v3.2.5
+// svg-pan-zoom v3.5.0
 // https://github.com/ariutta/svg-pan-zoom
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 var svgPanZoom = require('./svg-pan-zoom.js');
@@ -32,12 +32,15 @@ module.exports = {
       instance.svg.appendChild(defs)
     }
 
-    // Create style element
-    var style = document.createElementNS(SvgUtils.svgNS, 'style')
-    style.setAttribute('type', 'text/css')
-    style.textContent = '.svg-pan-zoom-control { cursor: pointer; fill: black; fill-opacity: 0.333; } .svg-pan-zoom-control:hover { fill-opacity: 0.8; } .svg-pan-zoom-control-background { fill: white; fill-opacity: 0.5; } .svg-pan-zoom-control-background { fill-opacity: 0.8; }'
-    defs.appendChild(style)
-
+    // Check for style element, and create it if it doesn't exist
+    var styleEl = defs.querySelector('style#svg-pan-zoom-controls-styles');
+    if (!styleEl) {
+      var style = document.createElementNS(SvgUtils.svgNS, 'style')
+      style.setAttribute('id', 'svg-pan-zoom-controls-styles')
+      style.setAttribute('type', 'text/css')
+      style.textContent = '.svg-pan-zoom-control { cursor: pointer; fill: black; fill-opacity: 0.333; } .svg-pan-zoom-control:hover { fill-opacity: 0.8; } .svg-pan-zoom-control-background { fill: white; fill-opacity: 0.5; } .svg-pan-zoom-control-background { fill-opacity: 0.8; }'
+      defs.appendChild(style)
+    }
 
     // Zoom Group
     var zoomGroup = document.createElementNS(SvgUtils.svgNS, 'g');
@@ -178,7 +181,10 @@ ShadowViewport.prototype.init = function(viewport, options) {
   this.cacheViewBox()
 
   // Process CTM
-  this.processCTM()
+  var newCTM = this.processCTM()
+
+  // Update viewport CTM and cache zoom and pan
+  this.setCTM(newCTM)
 
   // Update CTM in this frame
   this.updateCTM()
@@ -212,29 +218,20 @@ ShadowViewport.prototype.cacheViewBox = function() {
 
     this.options.svg.removeAttribute('viewBox')
   } else {
-    var bBox = this.viewport.getBBox();
-
-    // Cache viewbox sizes
-    this.viewBox.x = bBox.x;
-    this.viewBox.y = bBox.y;
-    this.viewBox.width = bBox.width
-    this.viewBox.height = bBox.height
+    this.simpleViewBoxCache()
   }
 }
 
 /**
  * Recalculate viewport sizes and update viewBox cache
  */
-ShadowViewport.prototype.recacheViewBox = function() {
-  var boundingClientRect = this.viewport.getBoundingClientRect()
-    , viewBoxWidth = boundingClientRect.width / this.getZoom()
-    , viewBoxHeight = boundingClientRect.height / this.getZoom()
+ShadowViewport.prototype.simpleViewBoxCache = function() {
+  var bBox = this.viewport.getBBox()
 
-  // Cache viewbox
-  this.viewBox.x = 0
-  this.viewBox.y = 0
-  this.viewBox.width = viewBoxWidth
-  this.viewBox.height = viewBoxHeight
+  this.viewBox.x = bBox.x
+  this.viewBox.y = bBox.y
+  this.viewBox.width = bBox.width
+  this.viewBox.height = bBox.height
 }
 
 /**
@@ -249,6 +246,8 @@ ShadowViewport.prototype.getViewBox = function() {
 /**
  * Get initial zoom and pan values. Save them into originalState
  * Parses viewBox attribute to alter initial sizes
+ *
+ * @return {CTM} CTM object based on options
  */
 ShadowViewport.prototype.processCTM = function() {
   var newCTM = this.getCTM()
@@ -280,8 +279,7 @@ ShadowViewport.prototype.processCTM = function() {
   this.originalState.x = newCTM.e
   this.originalState.y = newCTM.f
 
-  // Update viewport CTM and cache zoom and pan
-  this.setCTM(newCTM);
+  return newCTM
 }
 
 /**
@@ -373,6 +371,9 @@ ShadowViewport.prototype.setCTM = function(newCTM) {
       if (this.options.beforeZoom(this.getRelativeZoom(), this.computeRelativeZoom(newCTM.a)) === false) {
         newCTM.a = newCTM.d = this.activeState.zoom
         willZoom = false
+      } else {
+        this.updateCache(newCTM);
+        this.options.onZoom(this.getRelativeZoom())
       }
     }
 
@@ -415,18 +416,15 @@ ShadowViewport.prototype.setCTM = function(newCTM) {
       // Update willPan flag
       if (preventPanX && preventPanY) {
         willPan = false
+      } else {
+        this.updateCache(newCTM);
+        this.options.onPan(this.getPan());
       }
     }
 
     // Check again if should zoom or pan
     if (willZoom || willPan) {
-      this.updateCache(newCTM)
-
       this.updateCTMOnNextFrame()
-
-      // After callbacks
-      if (willZoom) {this.options.onZoom(this.getRelativeZoom())}
-      if (willPan) {this.options.onPan(this.getPan())}
     }
   }
 }
@@ -470,11 +468,18 @@ ShadowViewport.prototype.updateCTMOnNextFrame = function() {
  * Update viewport CTM with cached CTM
  */
 ShadowViewport.prototype.updateCTM = function() {
+  var ctm = this.getCTM()
+
   // Updates SVG element
-  SvgUtils.setCTM(this.viewport, this.getCTM(), this.defs)
+  SvgUtils.setCTM(this.viewport, ctm, this.defs)
 
   // Free the lock
   this.pendingUpdate = false
+
+  // Notify about the update
+  if(this.options.onUpdatedCTM) {
+    this.options.onUpdatedCTM(ctm)
+  }
 }
 
 module.exports = function(viewport, options){
@@ -513,6 +518,7 @@ var optionsDefaults = {
 , onPan: null
 , customEventsHandler: null
 , eventsListenerElement: null
+, onUpdatedCTM: null
 }
 
 SvgPanZoom.prototype.init = function(svg, options) {
@@ -557,6 +563,9 @@ SvgPanZoom.prototype.init = function(svg, options) {
   , onPan: function(point) {
       if (that.viewport && that.options.onPan) {return that.options.onPan(point)}
     }
+  , onUpdatedCTM: function(ctm) {
+      if (that.viewport && that.options.onUpdatedCTM) {return that.options.onUpdatedCTM(ctm)}
+    }
   })
 
   // Wrap callbacks into public API context
@@ -565,6 +574,7 @@ SvgPanZoom.prototype.init = function(svg, options) {
   publicInstance.setOnZoom(this.options.onZoom)
   publicInstance.setBeforePan(this.options.beforePan)
   publicInstance.setOnPan(this.options.onPan)
+  publicInstance.setOnUpdatedCTM(this.options.onUpdatedCTM)
 
   if (this.options.controlIconsEnabled) {
     ControlIcons.enable(this)
@@ -586,7 +596,9 @@ SvgPanZoom.prototype.setupHandlers = function() {
   this.eventListeners = {
     // Mouse down group
     mousedown: function(evt) {
-      return that.handleMouseDown(evt, null);
+      var result = that.handleMouseDown(evt, prevEvt);
+      prevEvt = evt
+      return result;
     }
   , touchstart: function(evt) {
       var result = that.handleMouseDown(evt, prevEvt);
@@ -796,12 +808,13 @@ SvgPanZoom.prototype.publicZoomAtPoint = function(scale, point, absolute) {
     scale = this.computeFromRelativeZoom(scale)
   }
 
-  // If not a SVGPoint but has x and y than create a SVGPoint
-  if (Utils.getType(point) !== 'SVGPoint' && 'x' in point && 'y' in point) {
-    point = SvgUtils.createSVGPoint(this.svg, point.x, point.y)
-  } else {
-    throw new Error('Given point is invalid')
-    return
+  // If not a SVGPoint but has x and y then create a SVGPoint
+  if (Utils.getType(point) !== 'SVGPoint') {
+    if('x' in point && 'y' in point) {
+      point = SvgUtils.createSVGPoint(this.svg, point.x, point.y)
+    } else {
+      throw new Error('Given point is invalid')
+    }
   }
 
   this.zoomAtPoint(scale, point, absolute)
@@ -1003,7 +1016,7 @@ SvgPanZoom.prototype.center = function() {
  * Use when viewport contents change
  */
 SvgPanZoom.prototype.updateBBox = function() {
-  this.viewport.recacheViewBox()
+  this.viewport.simpleViewBoxCache()
 }
 
 /**
@@ -1050,6 +1063,12 @@ SvgPanZoom.prototype.resize = function() {
   this.width = boundingClientRectNormalized.width
   this.height = boundingClientRectNormalized.height
 
+  // Recalculate original state
+  var viewport = this.viewport
+  viewport.options.width = this.width
+  viewport.options.height = this.height
+  viewport.processCTM()
+
   // Reposition control icons by re-enabling them
   if (this.options.controlIconsEnabled) {
     this.getPublicInstance().disableControlIcons()
@@ -1068,6 +1087,7 @@ SvgPanZoom.prototype.destroy = function() {
   this.onZoom = null
   this.beforePan = null
   this.onPan = null
+  this.onUpdatedCTM = null
 
   // Destroy custom event handlers
   if (this.options.customEventsHandler != null) { // jshint ignore:line
@@ -1100,6 +1120,9 @@ SvgPanZoom.prototype.destroy = function() {
 
   // Delete options and its contents
   delete this.options
+
+  // Delete viewport to make public shadow viewport functions uncallable
+  delete this.viewport
 
   // Destroy public instance and rewrite getPublicInstance
   delete this.publicInstance
@@ -1172,6 +1195,8 @@ SvgPanZoom.prototype.getPublicInstance = function() {
     , zoomIn: function() {this.zoomBy(1 + that.options.zoomScaleSensitivity); return that.pi}
     , zoomOut: function() {this.zoomBy(1 / (1 + that.options.zoomScaleSensitivity)); return that.pi}
     , getZoom: function() {return that.getRelativeZoom()}
+      // CTM update
+    , setOnUpdatedCTM: function(fn) {that.options.onUpdatedCTM = fn === null ? null : Utils.proxy(fn, that.publicInstance); return that.pi}
       // Reset
     , resetZoom: function() {that.resetZoom(); return that.pi}
     , resetPan: function() {that.resetPan(); return that.pi}
@@ -1385,6 +1410,13 @@ module.exports = {
       , s = 'matrix(' + matrix.a + ',' + matrix.b + ',' + matrix.c + ',' + matrix.d + ',' + matrix.e + ',' + matrix.f + ')';
 
     element.setAttributeNS(null, 'transform', s);
+    if ('transform' in element.style) {
+      element.style.transform = s;
+    } else if ('-ms-transform' in element.style) {
+      element.style['-ms-transform'] = s;
+    } else if ('-webkit-transform' in element.style) {
+      element.style['-webkit-transform'] = s;
+    }
 
     // IE has a bug that makes markers disappear on zoom (when the matrix "a" and/or "d" elements change)
     // see http://stackoverflow.com/questions/17654578/svg-marker-does-not-work-in-ie9-10
