@@ -53,9 +53,9 @@ public final class GraphBuilder {
 		resultCache = new ExpiringCache<>(
 				jobTimeout + Props.INSTANCE.getPropertyAsLong("resultDiscardMillis", 30000L),
 				(key, evictedEntry) -> {
-					evictedEntry.cancel(true);
+					boolean cancelled = evictedEntry.cancel(true);
 					executorService.purge();
-					LOGGER.debug("Job {} expired before completion", key);
+					LOGGER.debug("Job {} expired before {}", key, (cancelled ? "completion" : "pick up"));
 				}
 		);
 		

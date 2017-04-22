@@ -55,24 +55,24 @@ public class GraphJob<OT> implements Callable<GraphOutput<OT>> {
 			
 			Container container = logicImpl.create(graphId, extraParam);
 			
-			checkInterrupted();
+			checkInterrupted("before import controller processing");
 			
 			IMPORT_CONTROLLER.process(container, DEFAULT_PROCESSOR, ws);
 
-			checkInterrupted();
+			checkInterrupted("before layout processing");
 			
 			layoutImpl.processGraph();
 
-			checkInterrupted();
+			checkInterrupted("before export");
 			
 			OT output = graphExporter.export();
 
-			checkInterrupted();
+			checkInterrupted("before return");
 			
 			result = new GraphOutput<>(output);
 		}
 		catch (InterruptedException e) {
-			LOGGER.debug("Graph job interrupted");
+			LOGGER.debug("Graph job interrupted: {}", e.getMessage());
 			throw new CancellationException("Graph job interrupted during processing");
 		}
 		finally {
@@ -90,9 +90,9 @@ public class GraphJob<OT> implements Callable<GraphOutput<OT>> {
 		return result;
 	}
 	
-	private void checkInterrupted() throws InterruptedException {
+	private void checkInterrupted(String msg) throws InterruptedException {
 		if (Thread.interrupted()) {
-			throw new InterruptedException();
+			throw new InterruptedException(msg);
 		}
 	}
 	
