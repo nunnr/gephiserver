@@ -31,24 +31,28 @@ $(window).on('load', function() {
 	};
 	var svgPanZoomCreate = function(svg) {
 		if (svg) {
+			graph.finish();
 			var height = getWindowHeight();
 			height -= $('header').outerHeight(true);
 			height -= graph.css('padding-top').replace('px', '');
 			height -= graph.css('padding-bottom').replace('px', '');
 			height -= $('footer').outerHeight(true);
-			$(svg).attr('width', '').attr('height', '').css({
+			$(svg).removeAttr('width').removeAttr('height').css({
 				'width': '100%',
 				'height': height + 'px'
 			});
-			svgPanZoom(svg, {
-				controlIconsEnabled: true
+			graph.fadeIn(function(){
+				svgPanZoom(svg, {
+					controlIconsEnabled: true
+				});
 			});
 		}
 	};
-	var svgPanZoomDestroy = function() {
-		var svg = getSvg();
+	var svgPanZoomDestroy = function(svg) {
 		if (svg) {
+			graph.finish();
 			svgPanZoom(svg).destroy();
+			graph.fadeOut();
 		}
 	};
 	var pollAsyncResult = function(asyncUuid, timeout) {
@@ -77,11 +81,10 @@ $(window).on('load', function() {
 		}, timeout);
 	};
 	$('form').on('submit', function() {
-		svgPanZoomDestroy();
+		svgPanZoomDestroy(getSvg());
 		var id = $(this).find('select[name="graphs"] option:selected').val();
 		var async = $(this).find('input[name="async"]').prop('checked');
 		if (async) {
-			graph.html('<div class="spin">A</div>');
 			$.ajax({
 				url: '/gephi-server/rest/graph/stdSvgAsync'
 				, method: 'POST'
