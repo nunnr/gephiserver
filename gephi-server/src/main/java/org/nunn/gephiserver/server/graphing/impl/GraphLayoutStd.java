@@ -55,7 +55,7 @@ public class GraphLayoutStd implements GraphLayout {
 		yifanHuLayout.setOptimalDistance(250f);
 		for (int i = 0; i < 100 && yifanHuLayout.canAlgo(); i++) {
 			yifanHuLayout.goAlgo();
-			checkInterrupted();
+			checkInterrupted("during YifanHuLayout");
 		}
 		
 		//Get Centrality
@@ -63,7 +63,7 @@ public class GraphLayoutStd implements GraphLayout {
 		distance.setDirected(true);
 		distance.execute(graphModel);
 		Column centralityColumn = graphModel.getNodeTable().getColumn(GraphDistance.BETWEENNESS);
-		checkInterrupted();
+		checkInterrupted("after GraphDistance");
 
 		//Rank size by centrality
 		Function func = appearanceModel.getNodeFunction(graph, centralityColumn, RankingNodeSizeTransformer.class);
@@ -71,13 +71,13 @@ public class GraphLayoutStd implements GraphLayout {
 		centralityTransformer.setMinSize(4);
 		centralityTransformer.setMaxSize(20);
 		appearanceController.transform(func);
-		checkInterrupted();
+		checkInterrupted("after RankingNodeSizeTransformer");
 
 		// Modularity algorithm - community detection
 		Modularity modularity = new Modularity();
 		modularity.execute(graphModel);
 		Column modColumn = graphModel.getNodeTable().getColumn(Modularity.MODULARITY_CLASS);
-		checkInterrupted();
+		checkInterrupted("after Modularity");
 
 		// Partition by the column just created by Modularity algorithm
 		func = appearanceModel.getNodeFunction(graph, modColumn, PartitionElementColorTransformer.class);
@@ -85,7 +85,7 @@ public class GraphLayoutStd implements GraphLayout {
 		Palette palette = randomPalette(partition.size());
 		partition.setColors(palette.getColors());
 		appearanceController.transform(func);
-		checkInterrupted();
+		checkInterrupted("after PartitionElementColorTransformer");
 
 		// space out nodes to prevent text labels overlapping
 		LabelAdjust labelAdjust = new LabelAdjust(null);
@@ -96,7 +96,7 @@ public class GraphLayoutStd implements GraphLayout {
 		labelAdjust.initAlgo();
 		for (int i = 0; i < 40 && labelAdjust.canAlgo(); i++) {
 			labelAdjust.goAlgo();
-			checkInterrupted();
+			checkInterrupted("during LabelAdjust");
 		}
 
 		//Set 'show labels' option in Preview - and disable node size influence on text size
@@ -134,9 +134,9 @@ public class GraphLayoutStd implements GraphLayout {
 		return new Palette(colors);
 	}
 
-	private void checkInterrupted() throws InterruptedException {
+	private void checkInterrupted(String msg) throws InterruptedException {
 		if (Thread.interrupted()) {
-			throw new InterruptedException();
+			throw new InterruptedException(msg);
 		}
 	}
 

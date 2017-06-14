@@ -84,7 +84,7 @@ public final class GraphBuilder {
 		executorService.purge();
 		try {
 			future = executorService.submit(graphJob);
-			LOGGER.info("Job queue remaing capacity: {}", executorService.getQueue().remainingCapacity());
+			LOGGER.debug("Job queue remaing capacity: {}", ()->{return executorService.getQueue().remainingCapacity();});
 		}
 		catch (RejectedExecutionException e) {
 			LOGGER.warn("Rejected graph job {}", graphJob.uuid);
