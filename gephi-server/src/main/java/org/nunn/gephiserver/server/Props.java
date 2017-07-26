@@ -24,11 +24,21 @@ import java.util.regex.Pattern;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+/**
+ * Reloadable singleton properties source.
+ * 
+ * Looks for application.properties in a folder defined by system property,
+ * defined by environment variable, or lastly where the application resides.
+ * 
+ * Can return properties typed String, Integer, Boolean, Long or any other class with valueOf(String) method.
+ * 
+ * @author Rob
+ */
 public class Props {
 	
 	private static final Logger LOGGER = LogManager.getLogger(Props.class);
 	
-	private static final String APP_CONF_DIR_PROPERTY_NAME = "configurationDirectory";
+	private static final String APP_CONF_DIR_PROPERTY_NAME = Props.class.getPackage().getName().replace('.', '_') + "_cfg_dir";
 	private static final String APP_PROPS_DIRECTORY = "/var/" + Props.class.getPackage().getName();
 	private static final String APP_PROPS_FILE_NAME = "application.properties";
 	
@@ -46,8 +56,8 @@ public class Props {
 		try {
 			loc = Paths.get(location.toURI());
 			
-			BasicFileAttributes attr = Files.readAttributes(loc, BasicFileAttributes.class);
-			if ( ! attr.isDirectory()) {
+			// Handle JAR file location. Get containing folder.
+			if ( ! Files.readAttributes(loc, BasicFileAttributes.class).isDirectory()) {
 				Path parent = loc.getParent();
 				if (parent == null) {
 					throw new InvalidPathException(loc.toString(), "Cannot resolve parent of non-directory path.");
@@ -69,9 +79,12 @@ public class Props {
 		try {
 			String confDir = System.getProperty(APP_CONF_DIR_PROPERTY_NAME);
 			if (confDir == null) {
-				confDir = APP_PROPS_DIRECTORY;
+				confDir = System.getenv(APP_CONF_DIR_PROPERTY_NAME);
+				if (confDir == null) {
+					confDir = APP_PROPS_DIRECTORY;
+				}
 			}
-			File appPropsSource = new File(confDir + "/" + APP_PROPS_FILE_NAME);
+			File appPropsSource = Paths.get(confDir, APP_PROPS_FILE_NAME).toFile();
 			if (appPropsSource.canRead()) {
 				LOGGER.info("Found {}: {}", APP_PROPS_FILE_NAME, appPropsSource);
 				ins = new FileInputStream(appPropsSource);
