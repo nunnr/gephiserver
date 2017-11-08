@@ -34,12 +34,12 @@ public class GraphLogicStd implements GraphLogic {
 	public Container create(Integer graphId, Map<String, Object> extraParam) {
 		LOGGER.debug("Gephi: Setup container, nodes and edges.");
 		
+		Report report = new Report();
+		
 		Container container = CONTAINER_FACTORY.newContainer();
-		container.setReport(new Report());
+		container.setReport(report);
 		
 		try (Connection con = graphDataSource.getConnection()) {
-			con.setAutoCommit(false);
-		
 			Map<String, Object> graphParam = graphDataSource.getGraphByID(con, graphId);
 			graphParam.putAll(extraParam);
 			
@@ -55,6 +55,9 @@ public class GraphLogicStd implements GraphLogic {
 		}
 		catch (SQLException e) {
 			throw new RuntimeException(e);
+		}
+		finally {
+			report.close();
 		}
 		
 		return container;
